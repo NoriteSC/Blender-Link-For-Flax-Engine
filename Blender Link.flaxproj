@@ -1,8 +1,8 @@
 ﻿{
 	"Name": "Blender Link",
-	"Version": "1.0",
+	"Version": "0.0.1",
 	"Company": "",
-	"Copyright": "",
+	"Copyright": "Nori_SC",
 	"EditorTarget": "BlenderLinkEditorTarget",
 	"References": [
 		{
