@@ -3,7 +3,7 @@
 	"Version": "0.0.1",
 	"Company": "",
 	"Copyright": "Nori_SC",
-	"EditorTarget": "BlenderLinkEditorTarget",
+	"EditorTarget": "BlenderLinkTarget",
 	"References": [
 		{
 			"Name": "$(EnginePath)/Flax.flaxproj"

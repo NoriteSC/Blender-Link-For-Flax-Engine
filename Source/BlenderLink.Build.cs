@@ -1,7 +1,7 @@
 using Flax.Build;
 using Flax.Build.NativeCpp;
 
-public class BlenderLinkEditor : GameEditorModule
+public class BlenderLink : GameEditorModule
 {
     /// <inheritdoc />
     public override void Setup(BuildOptions options)

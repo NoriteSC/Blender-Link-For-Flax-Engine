@@ -1,6 +1,6 @@
 ﻿using Flax.Build;
 
-public class BlenderLinkEditorTarget : GameProjectEditorTarget
+public class BlenderLinkTarget : GameProjectEditorTarget
 {
     /// <inheritdoc />
     public override void Init()
@@ -8,6 +8,6 @@ public class BlenderLinkEditorTarget : GameProjectEditorTarget
         base.Init();
 
         // Reference the modules for editor
-        Modules.Add("BlenderLinkEditor");
+        Modules.Add("BlenderLink");
     }
 }

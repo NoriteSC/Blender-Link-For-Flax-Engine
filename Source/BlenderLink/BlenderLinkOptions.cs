@@ -88,7 +88,7 @@ outvall == null;
             if (Options.PathToBlender == null || Options.PathToBlender == "")
             {
                 Options.isNew = false;
-                var asset = Content.Load<Texture>(Path.Combine(Globals.ProjectFolder, "Plugins\\Blender Link\\Content\\BlenderLinkIcon.flax"));
+                var asset = Content.Load<Texture>(Path.Combine(Globals.ProjectFolder, "Plugins\\Blender Link\\Content\\BlenderLink.Icon.flax"));
                 CreateWindowSettings createWindowSettings = new CreateWindowSettings()
                 {
                     IsRegularWindow = false,
