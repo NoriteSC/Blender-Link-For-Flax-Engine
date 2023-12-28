@@ -15,9 +15,7 @@ using System;
 using FlaxEngine;
 using FlaxEditor;
 using FlaxEditor.Options;
-using FlaxEngine.Json;
 using System.IO;
-using FlaxEngine.GUI;
 
 namespace BlenderLink;
 /// <summary>

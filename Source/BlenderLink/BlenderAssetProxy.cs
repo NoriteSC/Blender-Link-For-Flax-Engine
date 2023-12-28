@@ -70,7 +70,55 @@ namespace BlenderLink
                 }
             }
             menu.AddSeparator();
-            menu.AddButton("Import Animations", () =>
+            ImportSkinnedModelsOrAnimations(menu, item);
+            menu.AddButton("Import Models");
+            menu.AddSeparator();
+        }
+        /// <inheritdoc/>
+        public override bool IsProxyFor(ContentItem item)
+        {
+            return item.FileName.EndsWith(".blend");
+        }
+        /// <inheritdoc/>
+        public override EditorWindow Open(Editor editor, ContentItem item)
+        {
+            new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender).Run();
+            return null;
+        }
+
+        private CheckBox MakeEntry(bool Checked, string Name, int ID, CheckBox parent,string Type)
+        {
+            var index = w.GUI.ChildrenCount;
+            var c = w.GUI.AddChild<CheckBox>();
+            if (parent != null)
+            {
+                c.Location = new Float2(c.Location.X + c.Size.X, c.Size.Y * ID);
+                c.Checked = Checked;
+                parent.StateChanged += (CheckBox root) => { ((CheckBox)w.GUI.Children[index]).Checked = root.Checked; };
+            }
+            else
+            {
+                c.Location = new Float2(c.Location.X, c.Size.Y * ID);
+                c.Checked = Checked;
+            }
+            var l = w.GUI.AddChild<Label>();
+            l.Text = Name;
+            l.HorizontalAlignment = TextAlignment.Near;
+            l.Location = new Float2(c.Location.X + c.Size.X, c.Location.Y);
+
+            var t = w.GUI.AddChild<Label>();
+            t.Text = Type;
+            t.AutoWidth = true;
+            t.HorizontalAlignment = TextAlignment.Near;
+            t.AnchorPreset = AnchorPresets.TopRight;
+            t.UpdateBounds();
+            t.Location = new Float2(0, l.Location.Y);
+            return c;
+        }
+
+        private void ImportSkinnedModelsOrAnimations(ContextMenu menu, ContentItem item)
+        {
+            menu.AddButton("Import Skinned Models,\nAnimations", () =>
             {
                 //run blender in headlessmode
                 string path = Path.Combine(BlenderLinkPlugin.PathToBlenderScripts, "ExtractAnimationData.py");
@@ -92,7 +140,7 @@ namespace BlenderLink
                         IsRegularWindow = false,
                         IsTopmost = true,
                         Title = "Blender Link",
-                        Size = new Float2(200, 600),
+                        Size = new Float2(400, 600),
                         AllowInput = true,
                         ShowInTaskbar = true,
                         StartPosition = WindowStartPosition.CenterParent,
@@ -108,15 +156,15 @@ namespace BlenderLink
 
 
                     CheckBox[] boxes = new CheckBox[lines.Length];
-                    for (int i = 0; i < lines.Length; i++)
+                    for (int i = 0; i < lines.Length; i++)//last is "\n" 
                     {
                         if (lines[i].StartsWith("--")) //--<state> <objname>
                         {
-                            boxes[i] = MakeEntry(lines[i][2] == 'O', lines[i].Remove(0, 4), i, parent);
+                            boxes[i] = MakeEntry(lines[i][2] == 'O',lines[i].Remove(0, 4), i, parent, "[Animation]");
                         }
                         else if (lines[i].StartsWith("-")) //-<state> <objname>
                         {
-                            boxes[i] = parent = MakeEntry(lines[i][1] == 'O', lines[i].Remove(0, 3), i, null);
+                            boxes[i] = parent = MakeEntry(lines[i][1] == 'O', lines[i].Remove(0, 3), i, null, "[SkinnedModel]");
                         }
                     }
 
@@ -159,23 +207,33 @@ namespace BlenderLink
                         {
                             var op = ModelTool.Options.Default;
                             op.Type = ModelTool.ModelType.Animation;
-                            var path = Path.Combine(Globals.ProjectContentFolder, Path.GetDirectoryName(item.NamePath.Remove(0, 8)), "Animations");
-                            
-                            var outputLocation = (ContentFolder)Editor.Instance.ContentDatabase.Find(path);
+
+                            var Aop = ModelTool.Options.Default;
+                            Aop.Type = ModelTool.ModelType.SkinnedModel;
+                            var SkinnedModelPath = Path.Combine(Globals.ProjectContentFolder, Path.GetDirectoryName(item.NamePath.Remove(0, 8)));
+                            var AnimationPath = Path.Combine(SkinnedModelPath, "Animations");
+
+                            var AnimationContentFolder = (ContentFolder)Editor.Instance.ContentDatabase.Find(AnimationPath);
+                            var SkinnedModelImportContentFolder = (ContentFolder)Editor.Instance.ContentDatabase.Find(SkinnedModelPath);
                             for (int i = 0; i < lines.Length; i++)
                             {
                                 if (lines[i].StartsWith("--")) //- X <objname> (subdata)
                                 {
-                                    var p = Path.Combine(path , lines[i].Remove(0,4) + ".fbx");
-                                    Editor.Instance.ContentImporting.Import(p, outputLocation, true, op);
+                                    var FinalAnimationPath = Path.Combine(AnimationPath, lines[i].Remove(0, 4) + ".fbx");
+                                    Editor.Instance.ContentImporting.Import(FinalAnimationPath, AnimationContentFolder, true, op);
+                                }
+                                if (lines[i].StartsWith("-")) //X <objname> (object)
+                                {
+                                    var p = Path.Combine(SkinnedModelPath, lines[i].Remove(0, 3) + ".fbx");
+                                    Editor.Instance.ContentImporting.Import(p, SkinnedModelImportContentFolder, true, Aop);
                                 }
                             }
                         };
                         bi.Run();
                     };
                     w.GUI.AddChild(Import);
-                    w.ClientSize = new(w.ClientSize.X, (lines.Length * 18) + Import.Size.Y + 8);
-                    
+                    w.ClientSize = new(w.ClientSize.X, (lines.Length * 18) + Import.Size.Y + 32);
+
                     w.GUI.PerformLayout(true);
                     w.Show();
                     w.Closed += () => { w = null; };
@@ -183,43 +241,7 @@ namespace BlenderLink
 
                 bi.Run();
             }
-            );
-            menu.AddButton("Import Models");
-            menu.AddButton("Import Skinned Models");
-            menu.AddSeparator();
-        }
-        private CheckBox MakeEntry(bool Checked, string Name, int ID, CheckBox parent)
-        {
-            var index = w.GUI.ChildrenCount;
-            var c = w.GUI.AddChild<CheckBox>();
-            if (parent != null)
-            {
-                c.Location = new Float2(c.Location.X + c.Size.X, c.Size.Y * ID);
-                c.Checked = Checked;
-                parent.StateChanged += (CheckBox root) => { ((CheckBox)w.GUI.Children[index]).Checked = root.Checked; };
-            }
-            else
-            {
-                c.Location = new Float2(c.Location.X, c.Size.Y * ID);
-                c.Checked = Checked;
-            }
-            var l = w.GUI.AddChild<Label>();
-            l.Text = Name;
-            l.HorizontalAlignment = TextAlignment.Near;
-            l.Location = new Float2(c.Location.X + c.Size.X, c.Size.Y * ID);
-
-            return c;
-        }
-        /// <inheritdoc/>
-        public override bool IsProxyFor(ContentItem item)
-        {
-            return item.FileName.EndsWith(".blend");
-        }
-        /// <inheritdoc/>
-        public override EditorWindow Open(Editor editor, ContentItem item)
-        {
-            new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender).Run();
-            return null;
+);
         }
     }
 
