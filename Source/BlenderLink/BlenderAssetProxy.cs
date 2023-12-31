@@ -188,8 +188,8 @@ namespace BlenderLink
         {
             menu.AddButton("Import", () =>
             {
-                OnExtractDataComplited(item);
-                return;
+                //OnExtractDataComplited(item);
+                //return;
                 //run blender in headlessmode
                 string path = Path.Combine(BlenderLinkPlugin.PathToBlenderScripts, "ExtractData.py");
                 var bi = new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender)
