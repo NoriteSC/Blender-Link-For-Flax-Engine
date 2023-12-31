@@ -22,20 +22,112 @@ using FlaxEngine.GUI;
 using System.Collections.Generic;
 using FlaxEngine.Tools;
 using FlaxEditor.Content.Import;
+using System.Text;
+using FlaxEditor.Content.Thumbnails;
+using FlaxEditor.Content.GUI;
+using System.Xml.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
+using static FlaxEditor.GUI.ItemsListContextMenu;
+using static BlenderLink.BLTCashe;
 
 namespace BlenderLink
 {
     /// <inheritdoc/>
-    public struct BlenderFileRefrence {}
+    public class BlenderFileAssetItem : AssetItem
+    {   /// <inheritdoc/>
+        public Texture icon;
+        public Color acolor;
+        /// <inheritdoc/>
+        public override ContentItemType ItemType => ContentItemType.Other;
+        /// <inheritdoc/>
+        public BlenderFileAssetItem(string path, string typeName, ref Guid id) : base(path, typeName, ref id){}
+        /// <inheritdoc/>
+        public override ContentItemSearchFilter SearchFilter => ContentItemSearchFilter.Other;
+        /// <inheritdoc/>
+        public override void Draw()
+        {
+            var size = Size;
+            var style = Style.Current;
+            var view = Parent as ContentView;
+            var isSelected = view.IsSelected(this);
+            var clientRect = new Rectangle(Float2.Zero, size);
+            var textRect = TextRectangle;
+            Rectangle thumbnailRect;
+            TextAlignment nameAlignment;
+            switch (view.ViewType)
+            {
+                case ContentViewType.Tiles:
+                    {
+                        var thumbnailSize = size.X;
+                        thumbnailRect = new Rectangle(0, 0, thumbnailSize, thumbnailSize);
+                        nameAlignment = TextAlignment.Center;
+
+                        // Small shadow
+                        var shadowRect = new Rectangle(2, 2, clientRect.Width + 1, clientRect.Height + 1);
+                        var color = Color.Black.AlphaMultiplied(0.2f);
+                        Render2D.FillRectangle(shadowRect, color);
+
+                        Render2D.FillRectangle(clientRect, style.Background.RGBMultiplied(1.25f));
+                        Render2D.FillRectangle(TextRectangle, style.LightBackground);
+
+                        var accentHeight = 2 * view.ViewScale;
+                        var barRect = new Rectangle(0, thumbnailRect.Height - accentHeight, clientRect.Width, accentHeight);
+                        Render2D.FillRectangle(barRect, acolor);
+
+                        Render2D.DrawTexture(icon, thumbnailRect);
+                        if (isSelected)
+                        {
+                            Render2D.FillRectangle(textRect, Parent.ContainsFocus ? style.BackgroundSelected : style.LightBackground);
+                            Render2D.DrawRectangle(clientRect, Parent.ContainsFocus ? style.BackgroundSelected : style.LightBackground);
+                        }
+                        else if (IsMouseOver)
+                        {
+                            Render2D.FillRectangle(textRect, style.BackgroundHighlighted);
+                            Render2D.DrawRectangle(clientRect, style.BackgroundHighlighted);
+                        }
+
+                        break;
+                    }
+                case ContentViewType.List:
+                    {
+                        var thumbnailSize = size.Y - 2 * DefaultMarginSize;
+                        thumbnailRect = new Rectangle(DefaultMarginSize, DefaultMarginSize, thumbnailSize, thumbnailSize);
+                        nameAlignment = TextAlignment.Near;
+
+                        if (isSelected)
+                            Render2D.FillRectangle(clientRect, Parent.ContainsFocus ? style.BackgroundSelected : style.LightBackground);
+                        else if (IsMouseOver)
+                            Render2D.FillRectangle(clientRect, style.BackgroundHighlighted);
+
+                        Render2D.DrawTexture(icon, thumbnailRect);
+                        break;
+                    }
+                default: throw new ArgumentOutOfRangeException();
+            }
+
+            // Draw short name
+            Render2D.PushClip(ref textRect);
+            Render2D.DrawText(style.FontMedium, ShowFileExtension || view.ShowFileExtensions ? FileName : ShortName, textRect, style.Foreground, nameAlignment, TextAlignment.Center, TextWrapping.WrapWords, 1f, 0.95f);
+            Render2D.PopClip();
+            
+        }
+    }
 
     /// <summary>
-    /// BlenderFileFactory Script.
+    /// BlenderAssetProxy.
     /// </summary>
     public class BlenderAssetProxy : AssetProxy
     {
         Window w;
+        /// <inheritdoc />
+        protected override bool IsVirtual => true;
+        /// <inheritdoc />
+        public override bool CanExport => false;
+        /// <inheritdoc />
+        public override bool IsAsset => false;
         /// <inheritdoc/>
-        public override string TypeName => typeof(BlenderFileRefrence).Name;
+        public override string TypeName => "Blender file Proxy";
         /// <inheritdoc/>
         public override string Name => "Blender file Proxy";
         /// <inheritdoc/>
@@ -43,11 +135,18 @@ namespace BlenderLink
         /// <inheritdoc/>
         public override Color AccentColor => Color.Orange;
         /// <inheritdoc/>
-        public override AssetItem ConstructItem(string path, string typeName, ref Guid id) { return null; }
+        public override AssetItem ConstructItem(string path, string typeName, ref Guid id)
+        {
+            return new BlenderFileAssetItem(path, typeName, ref id)
+            {
+                icon = Content.Load<Texture>(Path.Combine(Globals.ProjectFolder, "Plugins\\Blender Link\\Content\\BlederIcons\\Main\\blender.flax")),
+                acolor = AccentColor
+            };
+        }
         /// <inheritdoc/>
         public override bool CanReimport(ContentItem item)
         {
-            return false;
+            return true;
         }
         /// <inheritdoc/>
         public override void OnContentWindowContextMenu(ContextMenu menu, ContentItem item)
@@ -71,7 +170,6 @@ namespace BlenderLink
             }
             menu.AddSeparator();
             ImportSkinnedModelsOrAnimations(menu, item);
-            menu.AddButton("Import Models");
             menu.AddSeparator();
         }
         /// <inheritdoc/>
@@ -79,169 +177,287 @@ namespace BlenderLink
         {
             return item.FileName.EndsWith(".blend");
         }
+
         /// <inheritdoc/>
         public override EditorWindow Open(Editor editor, ContentItem item)
         {
             new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender).Run();
             return null;
         }
-
-        private CheckBox MakeEntry(bool Checked, string Name, int ID, CheckBox parent,string Type)
-        {
-            var index = w.GUI.ChildrenCount;
-            var c = w.GUI.AddChild<CheckBox>();
-            if (parent != null)
-            {
-                c.Location = new Float2(c.Location.X + c.Size.X, c.Size.Y * ID);
-                c.Checked = Checked;
-                parent.StateChanged += (CheckBox root) => { ((CheckBox)w.GUI.Children[index]).Checked = root.Checked; };
-            }
-            else
-            {
-                c.Location = new Float2(c.Location.X, c.Size.Y * ID);
-                c.Checked = Checked;
-            }
-            var l = w.GUI.AddChild<Label>();
-            l.Text = Name;
-            l.HorizontalAlignment = TextAlignment.Near;
-            l.Location = new Float2(c.Location.X + c.Size.X, c.Location.Y);
-
-            var t = w.GUI.AddChild<Label>();
-            t.Text = Type;
-            t.AutoWidth = true;
-            t.HorizontalAlignment = TextAlignment.Near;
-            t.AnchorPreset = AnchorPresets.TopRight;
-            t.UpdateBounds();
-            t.Location = new Float2(0, l.Location.Y);
-            return c;
-        }
-
         private void ImportSkinnedModelsOrAnimations(ContextMenu menu, ContentItem item)
         {
-            menu.AddButton("Import Skinned Models,\nAnimations", () =>
+            menu.AddButton("Import", () =>
             {
+                OnExtractDataComplited(item);
+                return;
                 //run blender in headlessmode
-                string path = Path.Combine(BlenderLinkPlugin.PathToBlenderScripts, "ExtractAnimationData.py");
+                string path = Path.Combine(BlenderLinkPlugin.PathToBlenderScripts, "ExtractData.py");
                 var bi = new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender)
                 {
                     ScriptMode = true,
                     PathToBlenderPythonScript = path,
                 };
-
+                
                 bi.ExecutionComplited = (BlenderInstance bi) =>
                 {
-                    var p = Path.Combine(Globals.ProjectCacheFolder, "Blender Link Cache", bi.Item.NamePath.Remove(0, 8)) + ".BLTCashe";
-                    string[] lines = File.ReadAllLines(p);
-                    CheckBox parent = null;
-
-
-                    CreateWindowSettings settings = new CreateWindowSettings()
-                    {
-                        IsRegularWindow = false,
-                        IsTopmost = true,
-                        Title = "Blender Link",
-                        Size = new Float2(400, 600),
-                        AllowInput = true,
-                        ShowInTaskbar = true,
-                        StartPosition = WindowStartPosition.CenterParent,
-                        ActivateWhenFirstShown = true,
-                        HasBorder = true,
-                        //Parent = Editor.Instance.Windows.MainWindow
-                    };
-
-                    // Create window
-                    w = Platform.CreateWindow(ref settings);
-                    var windowGUI = w.GUI;
-
-
-
-                    CheckBox[] boxes = new CheckBox[lines.Length];
-                    for (int i = 0; i < lines.Length; i++)//last is "\n" 
-                    {
-                        if (lines[i].StartsWith("--")) //--<state> <objname>
-                        {
-                            boxes[i] = MakeEntry(lines[i][2] == 'O',lines[i].Remove(0, 4), i, parent, "[Animation]");
-                        }
-                        else if (lines[i].StartsWith("-")) //-<state> <objname>
-                        {
-                            boxes[i] = parent = MakeEntry(lines[i][1] == 'O', lines[i].Remove(0, 3), i, null, "[SkinnedModel]");
-                        }
-                    }
-
-                    //Debug.Log(final);
-                    Button Import = new Button()
-                    {
-                        AnchorPreset = AnchorPresets.HorizontalStretchBottom,
-                        Size = new Float2(0, 16),
-                        Location = new Float2(0, -18),
-                        Text = "Import"
-                    };
-                    Import.Clicked += () =>
-                    {
-
-                        for (int i = 0; i < lines.Length; i++)
-                        {
-                            if (lines[i].StartsWith("--")) //- X <objname> (subdata)
-                            {
-                                var c = lines[i].ToCharArray();
-                                c[2] = (boxes[i].Checked ? 'O' : 'X');
-                                lines[i] = new string(c);
-                            }
-                            else if (lines[i].StartsWith("-")) //X <objname> (object)
-                            {
-                                var c = lines[i].ToCharArray();
-                                c[1] = (boxes[i].Checked ? 'O' : 'X');
-                                lines[i] = new string(c);
-                            }
-                        }
-                        File.WriteAllLines(p, lines);
-                        w.Close();
-
-                        string path = Path.Combine(BlenderLinkPlugin.PathToBlenderScripts, "ExportAnimations.py");
-                        var bi = new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender)
-                        {
-                            ScriptMode = true,
-                            PathToBlenderPythonScript = path,
-                        };
-                        bi.ExecutionComplited += (BlenderInstance bi) =>
-                        {
-                            var op = ModelTool.Options.Default;
-                            op.Type = ModelTool.ModelType.Animation;
-
-                            var Aop = ModelTool.Options.Default;
-                            Aop.Type = ModelTool.ModelType.SkinnedModel;
-                            var SkinnedModelPath = Path.Combine(Globals.ProjectContentFolder, Path.GetDirectoryName(item.NamePath.Remove(0, 8)));
-                            var AnimationPath = Path.Combine(SkinnedModelPath, "Animations");
-
-                            var AnimationContentFolder = (ContentFolder)Editor.Instance.ContentDatabase.Find(AnimationPath);
-                            var SkinnedModelImportContentFolder = (ContentFolder)Editor.Instance.ContentDatabase.Find(SkinnedModelPath);
-                            for (int i = 0; i < lines.Length; i++)
-                            {
-                                if (lines[i].StartsWith("--")) //- X <objname> (subdata)
-                                {
-                                    var FinalAnimationPath = Path.Combine(AnimationPath, lines[i].Remove(0, 4) + ".fbx");
-                                    Editor.Instance.ContentImporting.Import(FinalAnimationPath, AnimationContentFolder, true, op);
-                                }
-                                if (lines[i].StartsWith("-")) //X <objname> (object)
-                                {
-                                    var p = Path.Combine(SkinnedModelPath, lines[i].Remove(0, 3) + ".fbx");
-                                    Editor.Instance.ContentImporting.Import(p, SkinnedModelImportContentFolder, true, Aop);
-                                }
-                            }
-                        };
-                        bi.Run();
-                    };
-                    w.GUI.AddChild(Import);
-                    w.ClientSize = new(w.ClientSize.X, (lines.Length * 18) + Import.Size.Y + 32);
-
-                    w.GUI.PerformLayout(true);
-                    w.Show();
-                    w.Closed += () => { w = null; };
+                    OnExtractDataComplited(item);
                 };
 
                 bi.Run();
             }
 );
+        }
+
+        private void OnExtractDataComplited(ContentItem item)
+        {
+            var p = Path.Combine(Globals.ProjectCacheFolder, "Blender Link Cache", item.NamePath.Remove(0, 8)) + ".BLTCashe";
+            BLTCashe cashe = new(p);
+
+            CreateWindowSettings settings = new CreateWindowSettings()
+            {
+                IsRegularWindow = false,
+                IsTopmost = true,
+                Title = "Blender Link",
+                Size = new Float2(400, 800),
+                AllowInput = true,
+                ShowInTaskbar = true,
+                StartPosition = WindowStartPosition.CenterParent,
+                ActivateWhenFirstShown = true,
+                HasBorder = true,
+                //Parent = Editor.Instance.Windows.MainWindow
+            };
+
+            // Create window
+            w = Platform.CreateWindow(ref settings);
+
+            var windowGUI = w.GUI.AddChild<ScrollableControl>();
+            windowGUI.IsScrollable = true;
+            windowGUI.AnchorPreset = AnchorPresets.StretchAll;
+            var Csize = cashe.MakeUI(windowGUI);
+            Button Import = new Button()
+            {
+                AnchorPreset = AnchorPresets.HorizontalStretchBottom,
+                Size = new Float2(0, 16),
+                Location = new Float2(0, -18),
+                Text = "Import"
+            };
+            var Hscrollbar = new VScrollBar(windowGUI, 0, 16);
+            Hscrollbar.LocalLocation = new Float2(-8, 0);
+            //Hscrollbar.Size = new Float2(16, w.Size.Y);
+            Hscrollbar.Maximum = Csize.Y - (Csize.Y - w.Size.Y);
+            Hscrollbar.Minimum = 0;
+            Hscrollbar.ValueChanged += () =>
+            {
+                windowGUI.ViewOffset = new Float2(windowGUI.ViewOffset.X, -Hscrollbar.Value);
+            };
+            Import.Clicked += () =>
+            {
+                w.Close();
+                cashe.Seralize(p);
+                string path = Path.Combine(BlenderLinkPlugin.PathToBlenderScripts, "Export.py");
+                var bi = new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender)
+                {
+                    ScriptMode = true,
+                    PathToBlenderPythonScript = path,
+                };
+                bi.ExecutionComplited += (BlenderInstance bi) =>
+                {
+                    var p = Path.Combine(Globals.ProjectCacheFolder, "Blender Link Cache", bi.Item.NamePath.Remove(0, 8)) + ".BLTCashe";
+                    BLTCashe cashe = new(p);
+                    BLTCashe.Line parent = cashe.GetCasheLine(0);
+
+                    var FolderSourcePath = Path.Combine(Globals.ProjectContentFolder, Path.GetDirectoryName(item.NamePath.Remove(0, 8)));
+                    var FolderImportContentFolder = (ContentFolder)Editor.Instance.ContentDatabase.Find(FolderSourcePath);
+                    var SkinnedModelOptions = ModelTool.Options.Default;
+                    SkinnedModelOptions.Type = ModelTool.ModelType.SkinnedModel;
+                    var ModelOptions = ModelTool.Options.Default;
+                    ModelOptions.Type = ModelTool.ModelType.Model;
+                    var AnimationOptions = ModelTool.Options.Default;
+                    AnimationOptions.Type = ModelTool.ModelType.Animation;
+                    //EDImport(Path.Combine(FolderSourcePath, item.ShortName, parent.ObjectName, "Animation", "Clips"), line.ObjectName, AnimationOptions);
+                    
+                    //;
+                    for (int i = 1; i < cashe.Lenght; i++)
+                    {
+                        Line line = cashe.GetCasheLine(i);
+                        if (line.Import)
+                        {
+                            if (line.Type == Line.ObjectType.MESH)
+                            {
+                                if (line.HasTypeAsParent(Line.ObjectType.ARMATURE, out var hit))
+                                {
+                                    if (hit.Import)
+                                    {
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, "SkinnedMeshes"), line.ObjectName,ref SkinnedModelOptions);
+                                    }
+                                }
+                                else
+                                {
+                                    EDImport(Path.Combine(FolderSourcePath, item.ShortName, "Meshes"), line.ObjectName,ref ModelOptions);
+                                }
+                            }
+                            else if (line.Type == Line.ObjectType.NLA_TRACK)
+                            {
+                                if (line.HasTypeAsParent(Line.ObjectType.ARMATURE, out var hit) || line.HasTypeAsParent(Line.ObjectType.MESH, out hit))
+                                {
+                                    if (hit.Import)
+                                    {
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName, "Animation", "NLA Tracks"), line.ObjectName,ref AnimationOptions);
+                                    }
+                                }
+                            }
+                            if (line.Type == Line.ObjectType.CLIP)
+                            {
+                                if (line.HasTypeAsParent(Line.ObjectType.ARMATURE, out var hit) || line.HasTypeAsParent(Line.ObjectType.MESH, out hit))
+                                {
+                                    if (hit.Import)
+                                    {
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, parent.ObjectName, "Animation", "Clips"), line.ObjectName,ref AnimationOptions);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+                bi.Run();
+            };
+            w.GUI.AddChild(Import);
+            //w.ClientSize = new(w.ClientSize.X + Csize.X, Csize.Y + Import.Size.Y + 32);
+
+            w.GUI.PerformLayout(true);
+            w.Show();
+            w.Closed += () => { w = null; };
+        }
+        private void EDImport(string to, string objName,ref ModelTool.Options settings)
+        {
+            var f = (ContentFolder)Editor.Instance.ContentDatabase.Find(to);
+            if (f != null)
+            {
+                Editor.Instance.ContentImporting.Import(Path.Combine(to, objName.Replace(".", "_") + ".fbx"), f, true, settings);
+            }
+        }
+    }
+    /// <summary>
+    /// BlenderAssetProxy.
+    /// </summary>
+    public class BlenderBackupAssetProxy : AssetProxy
+    {
+        /// <inheritdoc />
+        protected override bool IsVirtual => true;
+        /// <inheritdoc />
+        public override bool CanExport => false;
+        /// <inheritdoc />
+        public override bool IsAsset => false;
+        /// <inheritdoc/>
+        public override string TypeName => "Blender Backup file Proxy";
+        /// <inheritdoc/>
+        public override string Name => "Blender Backup file Proxy";
+        /// <inheritdoc/>
+        public override string FileExtension => "blend1";
+        /// <inheritdoc/>
+        public override Color AccentColor => Color.DarkOrange.RGBMultiplied(0.5f);
+        /// <inheritdoc/>
+        public override AssetItem ConstructItem(string path, string typeName, ref Guid id) 
+        {
+            return new BlenderFileAssetItem(path, typeName, ref id)
+            {
+                icon = Content.Load<Texture>(Path.Combine(Globals.ProjectFolder, "Plugins\\Blender Link\\Content\\BlederIcons\\Main\\file_backup.flax")),
+                acolor = AccentColor
+            };
+        }
+        /// <inheritdoc/>
+        public override bool CanReimport(ContentItem item)
+        {
+            return true;
+        }
+        /// <inheritdoc/>
+        public override void OnContentWindowContextMenu(ContextMenu menu, ContentItem item)
+        {
+            //remove opcion
+            for (int i = 0; i < menu.ItemsContainer.Children.Count; i++)
+            {
+                if (menu.ItemsContainer.Children[i] is ContextMenuButton bt)
+                {
+                    if (bt.Text == "Reimport" || bt.Text == "Open")
+                    {
+                        menu.ItemsContainer.Children.RemoveAt(i);
+                        i--;
+                    }
+                }
+            }
+        }
+        /// <inheritdoc/>
+        public override bool IsProxyFor(ContentItem item)
+        {
+            return item.FileName.EndsWith(".blend1");
+        }
+
+        /// <inheritdoc/>
+        public override EditorWindow Open(Editor editor, ContentItem item)
+        {
+            //new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender).Run();
+            return null;
+        }
+    }
+
+
+    public class PythonScriptProxy : AssetProxy
+    {
+        /// <inheritdoc />
+        protected override bool IsVirtual => true;
+        /// <inheritdoc />
+        public override bool CanExport => false;
+        /// <inheritdoc />
+        public override bool IsAsset => false;
+        /// <inheritdoc/>
+        public override string TypeName => "Python Script file Proxy";
+        /// <inheritdoc/>
+        public override string Name => "Python Script file Proxy";
+        /// <inheritdoc/>
+        public override string FileExtension => "py";
+        /// <inheritdoc/>
+        public override Color AccentColor => Color.Blue;
+        /// <inheritdoc/>
+        public override AssetItem ConstructItem(string path, string typeName, ref Guid id)
+        {
+            return new BlenderFileAssetItem(path, typeName, ref id)
+            {
+                icon = Content.Load<Texture>(Path.Combine(Globals.ProjectFolder, "Plugins\\Blender Link\\Content\\BlederIcons\\Main\\file_script.flax")),
+                acolor = AccentColor
+            };
+        }
+        /// <inheritdoc/>
+        public override bool CanReimport(ContentItem item)
+        {
+            return true;
+        }
+        /// <inheritdoc/>
+        public override void OnContentWindowContextMenu(ContextMenu menu, ContentItem item)
+        {
+            //remove opcion
+            for (int i = 0; i < menu.ItemsContainer.Children.Count; i++)
+            {
+                if (menu.ItemsContainer.Children[i] is ContextMenuButton bt)
+                {
+                    if (bt.Text == "Reimport")
+                    {
+                        menu.ItemsContainer.Children.RemoveAt(i);
+                        i--;
+                    }
+                }
+            }
+        }
+        /// <inheritdoc/>
+        public override bool IsProxyFor(ContentItem item)
+        {
+            return item.FileName.EndsWith(".py");
+        }
+
+        /// <inheritdoc/>
+        public override EditorWindow Open(Editor editor, ContentItem item)
+        {
+            //new BlenderLink.BlenderInstance(item, BlenderLinkOptions.Options.PathToBlender).Run();
+            return null;
         }
     }
 

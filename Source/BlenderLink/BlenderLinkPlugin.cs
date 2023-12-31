@@ -16,6 +16,9 @@ using FlaxEngine;
 using FlaxEditor;
 using FlaxEditor.Options;
 using System.IO;
+using FlaxEditor.Content.Import;
+using FlaxEditor.Content;
+using static FlaxEditor.GUI.Docking.DockHintWindow;
 
 namespace BlenderLink;
 /// <summary>
@@ -25,7 +28,7 @@ public class BlenderLinkPlugin : EditorPlugin
     /// <summary>
     /// Initializes a new instance of the <see cref="BlenderLinkPlugin"/> class.
     /// </summary>
-    public BlenderLinkPlugin()
+    public BlenderLinkPlugin() 
     {
         // Initialize plugin description
         _description = new PluginDescription
@@ -37,22 +40,35 @@ public class BlenderLinkPlugin : EditorPlugin
             AuthorUrl = "https://github.com/NoriteSC",
             RepositoryUrl = "https://github.com/NoriteSC/Blender-Link-For-Flax-Engine?tab=readme-ov-file",
             IsAlpha = true,
-            Version = new Version(0,0,1,0),
+            Version = new Version(0, 0, 6, 0),
         };
     }
     /// <inheritdoc/>
-    public BlenderAssetProxy proxy;
+    public AssetProxy[] Proxies = new AssetProxy[]
+    {
+        new BlenderAssetProxy(),
+        new BlenderBackupAssetProxy(),
+        new PythonScriptProxy(),
+    };
     /// <inheritdoc/>
     public static string PathToBlenderScripts { get; private set; }
     /// <inheritdoc/>
     public override void InitializeEditor()
     {
+        for (int i = 0; i < Proxies.Length; i++)
+        {
+            Editor.ContentDatabase.AddProxy(Proxies[i]);
+        }
+
+        //he he no build in, overload the import entry
+        ImportFileEntry.FileTypes["blend"] = Import;
         PathToBlenderScripts = Path.Combine(Globals.ProjectFolder, "Plugins\\Blender Link\\Source\\BlenderScripts\\");
         Editor.Options.AddCustomSettings("Blender Link", new OptionsModule.CreateCustomSettingsDelegate(() => { return BlenderLinkOptions.Options; }));
-        Editor.ContentDatabase.AddProxy(proxy = new BlenderAssetProxy());
         Editor.Options.OptionsChanged += Options_OptionsChanged;
         BlenderLinkOptions.Load();
+        Editor.ContentDatabase.Rebuild();
     }
+
     private void Options_OptionsChanged(EditorOptions obj)
     {
     }
@@ -61,6 +77,30 @@ public class BlenderLinkPlugin : EditorPlugin
     {
         Editor.Options.OptionsChanged -= Options_OptionsChanged;
         Editor.Options.RemoveCustomSettings("Blender Link");
-        Editor.ContentDatabase.RemoveProxy(proxy);
+        for (int i = 0; i < Proxies.Length; i++)
+        {
+            Editor.ContentDatabase.RemoveProxy(Proxies[i]);
+        }
+        Editor.ContentDatabase.Rebuild();
+    }
+
+    /// <inheritdoc/>
+    public class ImportFileRefrenceEntry : ImportFileEntry
+    {
+        /// <inheritdoc/>
+        public ImportFileRefrenceEntry(ref Request request) : base(ref request)
+        {
+            request.OutputPath = Path.GetFileNameWithoutExtension(request.OutputPath) + Path.GetExtension(request.InputPath);
+            request.IsInBuilt = false;
+        }
+        /// <inheritdoc/>
+        public override bool Import()
+        {
+            return false;
+        }
+    }
+    private static ImportFileEntry Import(ref Request request)
+    {
+        return new ImportFileRefrenceEntry(ref request);
     }
 }

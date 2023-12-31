@@ -121,7 +121,6 @@ namespace BlenderLink
                 }
                 else
                 {
-
                     BlenderLinkOptions.Options.PathToBlender = blenderPath;
                 }
             }

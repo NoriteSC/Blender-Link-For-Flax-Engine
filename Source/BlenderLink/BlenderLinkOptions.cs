@@ -80,6 +80,8 @@ namespace BlenderLink
                         Debug.LogError("[BlenderLink.FindBlenderExecutable] There is no association for the specified file type with an executable file."); return null;
                 }
                 outvall = Marshal.PtrToStringAnsi(executablePtr);
+                if (outvall == null)
+                    return null;
                 Marshal.FreeHGlobal(pathPtr);
                 Marshal.FreeHGlobal(stringEmptyPtr);
                 Marshal.FreeHGlobal(executablePtr);
