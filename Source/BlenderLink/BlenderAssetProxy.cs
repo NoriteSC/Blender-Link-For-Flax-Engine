@@ -11,6 +11,8 @@
 //                                                    writen by Nori_SC
 //                                                https://github.com/NoriteSC
 
+//#define ToBeEnabled
+
 using System;
 using FlaxEngine;
 using FlaxEditor;
@@ -120,8 +122,10 @@ namespace BlenderLink
     public class BlenderAssetProxy : AssetProxy
     {
         Window w;
+#if ToBeEnabled
         /// <inheritdoc />
         protected override bool IsVirtual => true;
+#endif
         /// <inheritdoc />
         public override bool CanExport => false;
         /// <inheritdoc />
@@ -346,8 +350,10 @@ namespace BlenderLink
     /// </summary>
     public class BlenderBackupAssetProxy : AssetProxy
     {
+#if ToBeEnabled
         /// <inheritdoc />
         protected override bool IsVirtual => true;
+#endif
         /// <inheritdoc />
         public override bool CanExport => false;
         /// <inheritdoc />
@@ -407,8 +413,10 @@ namespace BlenderLink
 
     public class PythonScriptProxy : AssetProxy
     {
+#if ToBeEnabled
         /// <inheritdoc />
         protected override bool IsVirtual => true;
+#endif
         /// <inheritdoc />
         public override bool CanExport => false;
         /// <inheritdoc />
