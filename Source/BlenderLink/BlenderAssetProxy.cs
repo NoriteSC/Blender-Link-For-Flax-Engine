@@ -288,12 +288,12 @@ namespace BlenderLink
                                 {
                                     if (hit.Import)
                                     {
-                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, "SkinnedMeshes"), line.ObjectName,ref SkinnedModelOptions);
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName), hit.ObjectName,ref SkinnedModelOptions);
                                     }
                                 }
                                 else
                                 {
-                                    EDImport(Path.Combine(FolderSourcePath, item.ShortName, "Meshes"), line.ObjectName,ref ModelOptions);
+                                    EDImport(Path.Combine(FolderSourcePath, item.ShortName, line.ObjectName), line.ObjectName,ref ModelOptions);
                                 }
                             }
                             else if (line.Type == Line.ObjectType.NLA_TRACK)
@@ -312,7 +312,7 @@ namespace BlenderLink
                                 {
                                     if (hit.Import)
                                     {
-                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, parent.ObjectName, "Animation", "Clips"), line.ObjectName,ref AnimationOptions);
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName, "Animation", "Clips"), line.ObjectName,ref AnimationOptions);
                                     }
                                 }
                             }
@@ -334,6 +334,10 @@ namespace BlenderLink
             if (f != null)
             {
                 Editor.Instance.ContentImporting.Import(Path.Combine(to, objName.Replace(".", "_") + ".fbx"), f, true, settings);
+            }
+            else
+            {
+                Debug.LogError("Faled to import:" + objName + "\nTo:"+ to);
             }
         }
     }

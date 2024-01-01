@@ -135,17 +135,7 @@ class BLTCashe:
         if parent.animation_data:
             self.AddOrSet(depth,"ANIM_DATA","Animation",parent.animation_data)
             if len(parent.animation_data.nla_tracks) != 0:
-                self.MuteTracks(parent)
-                for nla_track in parent.animation_data.nla_tracks:
-                        if self.AddOrSet(depth+1,"NLA_TRACK",nla_track.name,nla_track).Import:
-                            self.ExportNLAStrip(parent,nla_track)
-                        for strip in nla_track.strips:
-                            if strip.type == "META":
-                                if self.AddOrSet(depth+2,"SEQ_STRIP_META",strip.name,strip).Import:
-                                    self.ExportNLAStrip(parent,strip)
-                            else:
-                                if self.AddOrSet(depth+2,strip.type,strip.name,strip.action).Import:
-                                    self.ExportClip(parent,strip.action)
+                self.ExportNLA(depth,parent,parent.animation_data.nla_tracks)
             elif parent.animation_data.action:
                 if self.AddOrSet(depth+1,"CLIP",parent.animation_data.action.name,parent.animation_data.action).Import:
                     self.ExportClip(parent,parent.animation_data.action)
@@ -171,30 +161,58 @@ class BLTCashe:
             for NlaStrip in nla_tracks.strips:
                 NlaStrip.mute = True
 
-    def ExportNLAStrip(self,obj,NlaStrip):
-        NlaStrip.mute = False
-        print("Exportting NlaStrip:" +NlaStrip.name)
+    def ExportNLA(self,depth,obj,nla_tracks):
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        #obj.animation_data.action = NlaStrip.action
+        # set up Animation directorys for a object
+        NLA_Directory = os.path.join(self.Path , obj.name , "Animation","NLA Tracks")
+        Clips_Directory = os.path.join(self.Path , obj.name , "Animation","Clips")
+        if not os.path.exists(NLA_Directory):
+            os.makedirs(NLA_Directory)
+        if not os.path.exists(Clips_Directory):
+            os.makedirs(Clips_Directory)
         
-        directory = os.path.join(self.Path , obj.name , "Animation","NLA Tracks")
-        # Check whether the specified path exists or not
-        if not os.path.exists(directory):
-            # Create a new directory because it does not exist
-            os.makedirs(directory)
-            
+        # mute all tracks
+        for nla_track in nla_tracks:
+            nla_track.mute = False
+        
+        for nla_track in nla_tracks:
+            nla_track.mute = False
+            # unmute All strips
+            for strip in nla_track.strips:
+                strip.mute = False
+                
+            importNLATrack = self.AddOrSet(depth+1,"NLA_TRACK",nla_track.name,nla_track).Import
+            if nla_track.strips:
+                # export funcion for nla_track here
+                if importNLATrack:
+                    self.ExportAnimation(os.path.join(NLA_Directory, nla_track.name.replace(".", "_")) + ".fbx")
+                #mute All strips
+                for strip in nla_track.strips:
+                    strip.mute = True
+                # [sector end] export nla_track
+                # export individual strips
+                for strip in nla_track.strips:
+                    strip.mute = False
+                    Type = strip.type
+                    if Type == "META":
+                        Type = "SEQ_STRIP_META"
+                    # export strip or animation clips funcion here
+                    if self.AddOrSet(depth+2, Type, strip.name, strip).Import:
+                        self.ExportAnimation(os.path.join(Clips_Directory, strip.name.replace(".", "_")) + ".fbx")
+                    strip.mute = True
+            nla_track.mute = True
+    
+    def ExportAnimation(self,fpath):
         bpy.ops.export_scene.fbx(
-        filepath= os.path.join(directory, NlaStrip.name.replace(".", "_")) + ".fbx",
+        filepath= fpath,
         use_selection=True,
         add_leaf_bones=False,
         bake_anim_use_nla_strips=True,
         bake_anim_use_all_actions=False,
         object_types = {'ARMATURE'})
-    
-        NlaStrip.mute = True
-
+        
     def ExportMesh(self,obj):
         print("Exportting Mesh:" +obj.name)
         bpy.ops.object.select_all(action='DESELECT')
@@ -253,7 +271,7 @@ class BLTCashe:
         add_leaf_bones=False,
         bake_anim_use_nla_strips=True,
         bake_anim_use_all_actions=False,
-        object_types = {'ARMATURE'})
+        object_types = {'ARMATURE','MESH'})
 
 def main():
     print("[Blender Link] ExtractData.py has started execution")

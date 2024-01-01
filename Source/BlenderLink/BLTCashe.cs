@@ -513,14 +513,14 @@ namespace BlenderLink
             public bool HasTypeAsParent(ObjectType type,out Line hit)
             {
                 var p = this.Parent;
-                while (p == null)
+                while (p != null)
                 {
                     if(p.Type == type)
                     {
                         hit = p;
                         return true;
                     }
-                    p = this.Parent;
+                    p = p.Parent;
                 }
                 hit = null;
                 return false;

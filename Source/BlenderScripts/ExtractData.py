@@ -83,6 +83,8 @@ class BLTCashe:
         return self.lines
 
     def deserialize(self, path):
+        if not os.path.exists(path):
+            return
         self.lines = []
         with open(path, 'r') as file:
             self.deserializeList(file)
