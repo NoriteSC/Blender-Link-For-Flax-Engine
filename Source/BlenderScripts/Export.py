@@ -15,6 +15,8 @@
 import os
 import sys
 import bpy
+import math
+import mathutils
 
 #code section
 argv = sys.argv
@@ -121,6 +123,12 @@ class BLTCashe:
                 
     def TreeGetChildren(self, parent, depth):
         thisobjectcashe = self.AddOrSet(depth,parent.type,parent.name,parent)
+        
+        #ceneter the object
+        for c in parent.constraints:
+            c.enabled = False
+        parent.matrix_world = mathutils.Matrix.Identity(4)
+        
         if thisobjectcashe.Import:
             if thisobjectcashe.Type == "MESH":
                 sucess ,hit = thisobjectcashe.has_type_as_parent("ARMATURE")
@@ -242,7 +250,7 @@ class BLTCashe:
         if not os.path.exists(directory):
             # Create a new directory because it does not exist
             os.makedirs(directory)
-            
+        
         bpy.ops.export_scene.fbx(
         filepath= os.path.join(directory, anima.name.replace(".", "_")) + ".fbx",
         use_selection=True,
@@ -258,7 +266,7 @@ class BLTCashe:
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         obj.animation_data.action = clip
-        
+        obj.data.pose_position = 'REST'
         directory = os.path.join(self.Path , obj.name , "Animation","Clips")
         # Check whether the specified path exists or not
         if not os.path.exists(directory):
@@ -272,6 +280,7 @@ class BLTCashe:
         bake_anim_use_nla_strips=True,
         bake_anim_use_all_actions=False,
         object_types = {'ARMATURE','MESH'})
+        obj.data.pose_position = 'POSE'
 
 def main():
     print("[Blender Link] ExtractData.py has started execution")
