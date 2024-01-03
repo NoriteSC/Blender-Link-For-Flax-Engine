@@ -209,9 +209,9 @@ namespace BlenderLink
 
                 bi.Run();
             }
-);
+            );
         }
-
+        Queue<(string,string)> CookMeshCollisionQueue = new Queue<(string,string)>();
         private void OnExtractDataComplited(ContentItem item)
         {
             var p = Path.Combine(Globals.ProjectCacheFolder, "Blender Link Cache", item.NamePath.Remove(0, 8)) + ".BLTCashe";
@@ -278,9 +278,7 @@ namespace BlenderLink
                     ModelOptions.Type = ModelTool.ModelType.Model;
                     var AnimationOptions = ModelTool.Options.Default;
                     AnimationOptions.Type = ModelTool.ModelType.Animation;
-                    //EDImport(Path.Combine(FolderSourcePath, item.ShortName, parent.ObjectName, "Animation", "Clips"), line.ObjectName, AnimationOptions);
-                    
-                    //;
+
                     for (int i = 1; i < cashe.Lenght; i++)
                     {
                         Line line = cashe.GetCasheLine(i);
@@ -292,12 +290,12 @@ namespace BlenderLink
                                 {
                                     if (hit.Import)
                                     {
-                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName), hit.ObjectName,ref SkinnedModelOptions);
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName), hit.ObjectName, SkinnedModelOptions);
                                     }
                                 }
                                 else
                                 {
-                                    EDImport(Path.Combine(FolderSourcePath, item.ShortName, line.ObjectName), line.ObjectName,ref ModelOptions);
+                                    EDImport(Path.Combine(FolderSourcePath, item.ShortName, line.ObjectName), line.ObjectName, ModelOptions, true);
                                 }
                             }
                             else if (line.Type == Line.ObjectType.NLA_TRACK)
@@ -306,7 +304,7 @@ namespace BlenderLink
                                 {
                                     if (hit.Import)
                                     {
-                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName, "Animation", "NLA Tracks"), line.ObjectName,ref AnimationOptions);
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName, "Animation", "NLA Tracks"), line.ObjectName, AnimationOptions);
                                     }
                                 }
                             }
@@ -316,12 +314,31 @@ namespace BlenderLink
                                 {
                                     if (hit.Import)
                                     {
-                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName, "Animation", "Clips"), line.ObjectName,ref AnimationOptions);
+                                        EDImport(Path.Combine(FolderSourcePath, item.ShortName, hit.ObjectName, "Animation", "Clips"), line.ObjectName, AnimationOptions);
                                     }
                                 }
                             }
                         }
                     }
+
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(30000);//delay Collision cooking by 30s
+                        while (CookMeshCollisionQueue.Count != 0)
+                        {
+                            await Task.Delay(1000); //delay next Collision cook by 1s
+                            var patht = CookMeshCollisionQueue.Peek();
+                            var path = patht.Item2;
+                            Editor.Instance.ContentDatabase.RefreshFolder((ContentFolder)Editor.Instance.ContentDatabase.Find(patht.Item1), true);
+                            if (File.Exists(path + ".flax"))
+                            {
+                                CookMeshCollisionQueue.Dequeue();
+                                var m = Content.Load<Model>(path + ".flax");
+                                Editor.CookMeshCollision(path + " Collision Convex Mesh.flax", CollisionDataType.ConvexMesh, m);
+                                Editor.CookMeshCollision(path + " Collision Mesh.flax", CollisionDataType.TriangleMesh, m);
+                            }
+                        }
+                    });
                 };
                 bi.Run();
             };
@@ -332,17 +349,36 @@ namespace BlenderLink
             w.Show();
             w.Closed += () => { w = null; };
         }
-        private void EDImport(string to, string objName,ref ModelTool.Options settings)
+        private void EDImport(string to, string objName, ModelTool.Options settings, bool CreateCollisionData = false)
         {
-            var f = (ContentFolder)Editor.Instance.ContentDatabase.Find(to);
-            if (f != null)
+            Task.Run(async () =>
             {
-                Editor.Instance.ContentImporting.Import(Path.Combine(to, objName.Replace(".", "_") + ".fbx"), f, true, settings);
-            }
-            else
-            {
-                Debug.LogError("Faled to import:" + objName + "\nTo:"+ to);
-            }
+                var f = (ContentFolder)Editor.Instance.ContentDatabase.Find(to);
+                int TryCount = 0;
+                while (f == null)
+                {
+                    f = (ContentFolder)Editor.Instance.ContentDatabase.Find(to);
+                    TryCount++;
+                    if (TryCount == 10)
+                    {
+                        break;
+                    }
+                    await Task.Delay(100);
+                }
+                if (f != null)
+                {
+                    var pathAndName = Path.Combine(to, objName.Replace(".", "_"));
+                    Editor.Instance.ContentImporting.Import(pathAndName + ".fbx", f, true, settings);
+                    if (CreateCollisionData)
+                    {
+                        CookMeshCollisionQueue.Enqueue((to, pathAndName));
+                    }
+                }
+                else
+                {
+                    Debug.LogError("[Blender-Link] Faled to import:" + objName + "\nTo:" + to);
+                }
+            });
         }
     }
     /// <summary>
