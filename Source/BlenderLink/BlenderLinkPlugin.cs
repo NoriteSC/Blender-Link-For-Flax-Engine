@@ -40,7 +40,7 @@ public class BlenderLinkPlugin : EditorPlugin
             AuthorUrl = "https://github.com/NoriteSC",
             RepositoryUrl = "https://github.com/NoriteSC/Blender-Link-For-Flax-Engine?tab=readme-ov-file",
             IsAlpha = true,
-            Version = new Version(0, 0, 6, 0),
+            Version = new Version(0, 1, 5, 0),
         };
     }
     /// <inheritdoc/>
